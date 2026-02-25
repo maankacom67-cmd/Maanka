@@ -6,6 +6,9 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, Navigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoogleGenAI, Modality } from '@google/genai';
+import { playPCM } from './lib/audio';
+import AIHub from './screens/AIHub';
 import { 
   Briefcase, 
   MapPin, 
@@ -17,7 +20,9 @@ import {
   Bell,
   Clock,
   DollarSign,
-  ArrowLeft
+  ArrowLeft,
+  Play,
+  Sparkles
 } from 'lucide-react';
 import { JOBS } from './constants';
 import { Job } from './types';
@@ -162,6 +167,30 @@ const DashboardScreen = () => {
     job.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleReadAloud = async (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const text = `${job.title} at ${job.company} in ${job.location}. Salary is ${job.salary}.`;
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: text,
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
+          }
+        }
+      });
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        playPCM(base64Audio, 24000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
@@ -173,6 +202,10 @@ const DashboardScreen = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            <Link to="/ai-hub" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-white font-medium transition-colors">
+              <Sparkles className="w-5 h-5 text-accent" />
+              AI Hub
+            </Link>
             <button 
               onClick={handleLogout}
               className="p-2 text-white/80 hover:text-white transition-colors"
@@ -224,9 +257,18 @@ const DashboardScreen = () => {
                     </div>
                   </div>
                   
-                  <Button variant="accent" className="px-8 py-3 rounded-2xl font-bold">
-                    Apply Now
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={(e) => handleReadAloud(e, job)} 
+                      className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-colors"
+                      title="Read Aloud"
+                    >
+                      <Play className="w-5 h-5 text-white" />
+                    </button>
+                    <Button variant="accent" className="px-8 py-3 rounded-2xl font-bold">
+                      Apply Now
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -258,6 +300,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LoginScreen />} />
         <Route path="/signup" element={<SignupScreen />} />
+        <Route path="/ai-hub" element={<ProtectedRoute><AIHub /></ProtectedRoute>} />
         <Route 
           path="/dashboard" 
           element={
